@@ -1875,7 +1875,79 @@ class App(ctk.CTk):
             self.option_menu_auto_filename_format.grid_remove()
             self.check_box_auto_filename.configure(text=t('label_auto_filename'))
 
+    def directory_processing_worker(self):
+        """Process all files in a directory"""
+        proc_start_time = datetime.datetime.now()
+        self.cancel = False
 
+        # Show the stop button
+        self.start_button.pack_forget() # hide
+        self.stop_button.pack(padx=[20, 0], pady=[20,30], expand=False, fill='x', anchor='sw')
+
+        try:
+            if not self.directory_files:
+                self.logn(t('err_no_audio_file'), 'error')
+                tk.messagebox.showerror(title='noScribe', message=t('err_no_audio_file'))
+                return
+            
+            # Process files in directory
+            self.logn(t('dir_processing_files', count=len(self.directory_files)))
+            
+            for i, audio_file in enumerate(self.directory_files):
+                if self.cancel:
+                    break
+                
+                self.logn(t('dir_file_progress', current=i+1, total=len(self.directory_files), filename=os.path.basename(audio_file)))
+                
+                # Generate transcript filename for this file
+                if self.check_box_auto_filename.get():
+                    # Use auto-filename with selected format
+                    output_format = self.option_menu_auto_filename_format.get()
+                    transcript_file = self.generate_auto_filename(audio_file, output_format)
+                else:
+                    # Use default HTML format
+                    transcript_file = os.path.splitext(audio_file)[0] + '.html'
+                
+                # Set up for this file
+                self.audio_file = audio_file
+                self.transcript_file = transcript_file
+                self.my_transcript_file = transcript_file
+                self.file_ext = os.path.splitext(self.my_transcript_file)[1][1:]
+                
+                # Create log file for this file
+                if not os.path.exists(f'{config_dir}/log'):
+                    os.makedirs(f'{config_dir}/log')
+                self.log_file = open(f'{config_dir}/log/noScribe.log', 'w', encoding='utf-8')
+                
+                # Start transcription for this file
+                self.transcription_worker()
+                
+                # Close the log file for this file
+                if self.log_file:
+                    self.log_file.close()
+                    self.log_file = None
+            
+            # Log completion
+            if not self.cancel:
+                self.logn()
+                self.logn(t('transcription_finished'), 'highlight')
+                proc_time = datetime.datetime.now() - proc_start_time
+                proc_seconds = "{:02d}".format(int(proc_time.total_seconds() % 60))
+                proc_time_str = f'{int(proc_time.total_seconds() // 60)}:{proc_seconds}' 
+                self.logn(t('trancription_time', duration=proc_time_str))
+        
+        except Exception as e:
+            self.logn(t('err_transcription'), 'error')
+            traceback_str = traceback.format_exc()
+            self.logn(e, 'error', tb=traceback_str)
+        
+        finally:
+            # hide the stop button
+            self.stop_button.pack_forget() # hide
+            self.start_button.pack(padx=[20, 0], pady=[20,30], expand=False, fill='x', anchor='sw')
+
+            # hide progress
+            self.set_progress(0, 0)
 
 if __name__ == "__main__":
 
