@@ -929,15 +929,70 @@ class App(ctk.CTk):
         return audio_files
 
     def show_directory_warning(self, file_count):
-        """Show warning dialog for directory processing"""
+        """Show warning dialog for directory processing with 'Don't warn me again' checkbox"""
         message = t('dir_warning_message').replace('%{count}', str(file_count))
         # Fix newline characters
         message = message.replace('\\n', '\n')
-        result = tk.messagebox.askyesno(
-            title=t('dir_warning_title'),
-            message=message
-        )
-        return result
+        
+        # Create custom dialog
+        dialog = tk.Toplevel()
+        dialog.title(t('dir_warning_title'))
+        dialog.geometry("400x200")
+        dialog.resizable(False, False)
+        dialog.transient(self)  # Make dialog modal
+        dialog.grab_set()  # Make dialog modal
+        
+        # Center the dialog
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - (400 // 2)
+        y = (dialog.winfo_screenheight() // 2) - (200 // 2)
+        dialog.geometry(f"400x200+{x}+{y}")
+        
+        # Message label
+        message_label = tk.Label(dialog, text=message, wraplength=350, justify='left')
+        message_label.pack(pady=(20, 10), padx=20)
+        
+        # Checkbox for "Don't warn me again"
+        dont_warn_var = tk.BooleanVar()
+        dont_warn_checkbox = tk.Checkbutton(dialog, text="Don't warn me again", variable=dont_warn_var)
+        dont_warn_checkbox.pack(pady=(0, 20))
+        
+        # Button frame
+        button_frame = tk.Frame(dialog)
+        button_frame.pack(pady=(0, 20))
+        
+        result = [False]  # Use list to store result
+        
+        def on_yes():
+            result[0] = True
+            # Save the "don't warn" preference
+            if dont_warn_var.get():
+                config['dont_warn_directory'] = True
+                save_config()
+            dialog.destroy()
+        
+        def on_no():
+            result[0] = False
+            # Save the "don't warn" preference
+            if dont_warn_var.get():
+                config['dont_warn_directory'] = True
+                save_config()
+            dialog.destroy()
+        
+        # Yes/No buttons
+        yes_button = tk.Button(button_frame, text="Yes", command=on_yes, width=10)
+        yes_button.pack(side='left', padx=(0, 10))
+        
+        no_button = tk.Button(button_frame, text="No", command=on_no, width=10)
+        no_button.pack(side='left')
+        
+        # Focus on Yes button
+        yes_button.focus_set()
+        
+        # Wait for dialog to close
+        dialog.wait_window()
+        
+        return result[0]
 
     def button_directory_event(self):
         """Dedicated directory selection event handler"""
@@ -954,9 +1009,10 @@ class App(ctk.CTk):
                 tk.messagebox.showwarning("No Media Files", "No audio or video files found in the selected directory.")
                 return
             
-            # Show warning dialog
-            if not self.show_directory_warning(len(audio_files)):
-                return
+            # Show warning dialog (unless user has chosen not to be warned)
+            if not config.get('dont_warn_directory', False):
+                if not self.show_directory_warning(len(audio_files)):
+                    return
             
             # Store directory and files for processing
             self.audio_directory = dir_path
