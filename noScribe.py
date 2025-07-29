@@ -937,29 +937,48 @@ class App(ctk.CTk):
         # Create custom dialog
         dialog = tk.Toplevel()
         dialog.title(t('dir_warning_title'))
-        dialog.geometry("400x200")
+        dialog.geometry("450x240")
         dialog.resizable(False, False)
         dialog.transient(self)  # Make dialog modal
         dialog.grab_set()  # Make dialog modal
         
         # Center the dialog
         dialog.update_idletasks()
-        x = (dialog.winfo_screenwidth() // 2) - (400 // 2)
-        y = (dialog.winfo_screenheight() // 2) - (200 // 2)
-        dialog.geometry(f"400x200+{x}+{y}")
+        x = (dialog.winfo_screenwidth() // 2) - (450 // 2)
+        y = (dialog.winfo_screenheight() // 2) - (240 // 2)
+        dialog.geometry(f"450x240+{x}+{y}")
         
-        # Message label
-        message_label = tk.Label(dialog, text=message, wraplength=350, justify='left')
-        message_label.pack(pady=(20, 10), padx=20)
+        # Message with mixed colors - first/third parts white, warning part red
+        message_text = tk.Text(dialog, wrap='word', height=6, width=50, font=("", 10), 
+                              bg=dialog.cget('bg'), relief='flat', borderwidth=0)
+        message_text.pack(pady=(20, 10), padx=20, fill='both', expand=True)
         
-        # Checkbox for "Don't warn me again"
-        dont_warn_var = tk.BooleanVar()
-        dont_warn_checkbox = tk.Checkbutton(dialog, text="Don't warn me again", variable=dont_warn_var)
-        dont_warn_checkbox.pack(pady=(0, 20))
+        # Split message by "Warning:" to color different parts
+        message_parts = message.split("Warning:")
+        if len(message_parts) > 1:
+            # First part (before "Warning:") in white
+            message_text.insert('1.0', message_parts[0], 'white_text')
+            
+            # "Warning:" line in red
+            message_text.insert('end', "Warning:", 'red_text')
+            
+            # Rest of the message in white
+            if len(message_parts) > 1:
+                message_text.insert('end', message_parts[1], 'white_text')
+        else:
+            # Fallback if "Warning:" not found
+            message_text.insert('1.0', message, 'white_text')
+        
+        # Configure colors
+        message_text.tag_configure('white_text', foreground='white')
+        message_text.tag_configure('red_text', foreground='red', font=("", 10, "bold"))
+        
+        # Make text widget read-only
+        message_text.configure(state='disabled')
         
         # Button frame
         button_frame = tk.Frame(dialog)
-        button_frame.pack(pady=(0, 20))
+        button_frame.pack(pady=(0, 10))
         
         result = [False]  # Use list to store result
         
@@ -979,12 +998,17 @@ class App(ctk.CTk):
                 save_config()
             dialog.destroy()
         
-        # Yes/No buttons
-        yes_button = tk.Button(button_frame, text="Yes", command=on_yes, width=10)
+        # Yes/No buttons with customtkinter blue theme
+        yes_button = ctk.CTkButton(button_frame, text="Yes", command=on_yes, width=80)
         yes_button.pack(side='left', padx=(0, 10))
         
-        no_button = tk.Button(button_frame, text="No", command=on_no, width=10)
+        no_button = ctk.CTkButton(button_frame, text="No", command=on_no, width=80)
         no_button.pack(side='left')
+        
+        # Checkbox for "Don't warn me again" - below buttons, smaller text
+        dont_warn_var = tk.BooleanVar()
+        dont_warn_checkbox = tk.Checkbutton(dialog, text="Don't warn me again", variable=dont_warn_var, font=("", 9))
+        dont_warn_checkbox.pack(pady=(0, 20))
         
         # Focus on Yes button
         yes_button.focus_set()
@@ -1076,7 +1100,7 @@ class App(ctk.CTk):
             self.button_transcript_file_name.configure(text=os.path.basename(self.transcript_file))
             config['last_filetype'] = os.path.splitext(self.transcript_file)[1][1:]
             
-    def set_progress(self, step, value):
+    def set_progress(self, step, value, directory_progress=None):
         """ Update state of the progress bar """
         progr = -1
         if step == 1:
@@ -1100,6 +1124,11 @@ class App(ctk.CTk):
             progr_str = ''
         else:
             progr_str = f'({t("overall_progress")}{round(progr * 100)}%)'
+            
+        # Add directory progress if provided
+        if directory_progress and self.processing_directory:
+            progr_str += f' | {directory_progress}'
+            
         self.progress_textbox.configure(state=ctk.NORMAL)        
         self.progress_textbox.delete('1.0', tk.END)
         self.progress_textbox.insert(tk.END, progr_str)
@@ -1109,7 +1138,7 @@ class App(ctk.CTk):
     ################################################################################################
     # Main function
 
-    def transcription_worker(self):
+    def transcription_worker(self, directory_progress=None):
         # This is the main function where all the magic happens
         # We put this in a seperate thread so that it does not block the main ui
 
@@ -1312,7 +1341,7 @@ class App(ctk.CTk):
                     if ffmpeg_proc.returncode > 0:
                         raise Exception(t('err_ffmpeg'))
                     self.logn(t('audio_conversion_finished'))
-                    self.set_progress(1, 50)
+                    self.set_progress(1, 50, directory_progress)
                 except Exception as e:
                     self.logn(t('err_converting_audio'), 'error')
                     traceback_str = traceback.format_exc()
@@ -1388,7 +1417,7 @@ class App(ctk.CTk):
                         self.logn()
                         self.logn(t('start_identifiying_speakers'), 'highlight')
                         self.logn(t('loading_pyannote'))
-                        self.set_progress(1, 100)
+                        self.set_progress(1, 100, directory_progress)
 
                         diarize_output = os.path.join(tmpdir.name, 'diarize_out.yaml')
                         diarize_abspath = 'python ' + os.path.join(app_dir, 'diarize.py')
@@ -1436,9 +1465,9 @@ class App(ctk.CTk):
                                     progress_percent = int(progress[2])
                                     self.logr(f'{step_name}: {progress_percent}%')                       
                                     if step_name == 'segmentation':
-                                        self.set_progress(2, progress_percent * 0.3)
+                                        self.set_progress(2, progress_percent * 0.3, directory_progress)
                                     elif step_name == 'embeddings':
-                                        self.set_progress(2, 30 + (progress_percent * 0.7))
+                                        self.set_progress(2, 30 + (progress_percent * 0.7), directory_progress)
                                 elif line.startswith('error '):
                                     self.logn('PyAnnote error: ' + line[5:], 'error')
                                 elif line.startswith('log: '):
@@ -1827,7 +1856,7 @@ class App(ctk.CTk):
                                 save_doc()
 
                         progr = round((segment.end/info.duration) * 100)
-                        self.set_progress(3, progr)
+                        self.set_progress(3, progr, directory_progress)
 
                     save_doc()
                     self.logn()
@@ -1872,7 +1901,7 @@ class App(ctk.CTk):
             self.start_button.pack(padx=[20, 0], pady=[20,30], expand=False, fill='x', anchor='sw')
 
             # hide progress
-            self.set_progress(0, 0)
+            self.set_progress(0, 0, directory_progress)
             
     def button_start_event(self):
         if self.processing_directory:
@@ -1953,7 +1982,12 @@ class App(ctk.CTk):
                 if self.cancel:
                     break
                 
-                self.logn(t('dir_file_progress', current=i+1, total=len(self.directory_files), filename=os.path.basename(audio_file)))
+                # Create directory progress string (e.g., "04/10")
+                current_file = i + 1
+                total_files = len(self.directory_files)
+                directory_progress = f"{current_file:02d}/{total_files:02d}"
+                
+                self.logn(t('dir_file_progress', current=current_file, total=total_files, filename=os.path.basename(audio_file)))
                 
                 # Generate transcript filename for this file
                 if self.check_box_auto_filename.get():
@@ -1975,8 +2009,8 @@ class App(ctk.CTk):
                     os.makedirs(f'{config_dir}/log')
                 self.log_file = open(f'{config_dir}/log/noScribe.log', 'w', encoding='utf-8')
                 
-                # Start transcription for this file
-                self.transcription_worker()
+                # Start transcription for this file with directory progress
+                self.transcription_worker(directory_progress)
                 
                 # Close the log file for this file
                 if self.log_file:
