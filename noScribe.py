@@ -368,6 +368,42 @@ def html_to_webvtt(parser: AdvancedHTMLParser.AdvancedHTMLParser, media_path: st
                 txt = vtt_escape(html_node_to_text(segment))
                 vtt += f'{i+1}\n{start} --> {end}\n<v {spkr}>{txt.lstrip()}\n\n'
     return vtt
+
+def html_to_srt(parser: AdvancedHTMLParser.AdvancedHTMLParser, media_path: str):
+    """Convert HTML transcript to SRT format"""
+    srt = ''
+    segments = parser.getElementsByTagName('a')
+    i = 0
+    for i in range(len(segments)):
+        segment = segments[i]
+        name = segment.attributes['name']
+        if name is not None:
+            name_elems = name.split('_', 4)
+            if len(name_elems) > 1 and name_elems[0] == 'ts':
+                start_ms = int(name_elems[1])
+                end_ms = int(name_elems[2])
+                spkr = name_elems[3]
+                txt = html_node_to_text(segment)
+                
+                # Convert milliseconds to SRT time format (HH:MM:SS,mmm)
+                start_time = ms_to_srt_time(start_ms)
+                end_time = ms_to_srt_time(end_ms)
+                
+                # Add speaker label if present
+                if spkr and spkr != 'none':
+                    txt = f'{spkr}: {txt}'
+                
+                srt += f'{i+1}\n{start_time} --> {end_time}\n{txt.strip()}\n\n'
+    return srt
+
+def ms_to_srt_time(milliseconds: int) -> str:
+    """Convert milliseconds to SRT time format (HH:MM:SS,mmm)"""
+    seconds = milliseconds // 1000
+    ms = milliseconds % 1000
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    secs = seconds % 60
+    return f'{hours:02d}:{minutes:02d}:{secs:02d},{ms:03d}'
     
 class TimeEntry(ctk.CTkEntry): # special Entry box to enter time in the format hh:mm:ss
                                # based on https://stackoverflow.com/questions/63622880/how-to-make-python-automatically-put-colon-in-the-format-of-time-hhmmss
@@ -414,6 +450,7 @@ class App(ctk.CTk):
         self.transcript_file = ''
         self.log_file = None
         self.cancel = False
+        self.paused = False
         self.processing_directory = False
         self.directory_files = []
 
@@ -687,8 +724,14 @@ class App(ctk.CTk):
         self.start_button = ctk.CTkButton(self.sidebar_frame, height=42, text=t('start_button'), command=self.button_start_event)
         self.start_button.pack(padx=[20, 0], pady=[20,30], expand=False, fill='x', anchor='sw')
 
-        # Stop Button
-        self.stop_button = ctk.CTkButton(self.sidebar_frame, height=42, fg_color='darkred', hover_color='darkred', text=t('stop_button'), command=self.button_stop_event)
+        # Button frame for stop and pause buttons
+        self.button_frame = ctk.CTkFrame(self.sidebar_frame, fg_color='transparent')
+        
+        # Stop Button (equal width)
+        self.stop_button = ctk.CTkButton(self.button_frame, height=42, fg_color='darkred', hover_color='darkred', text=t('stop_button'), command=self.button_stop_event)
+        
+        # Pause/Resume Button (equal width)
+        self.pause_button = ctk.CTkButton(self.button_frame, height=42, fg_color='#3B8ED0', hover_color='#3B8ED0', text='⏸', command=self.button_pause_event)
         
         # create log textbox
         self.log_frame = ctk.CTkFrame(self.frame_main, corner_radius=0, fg_color='transparent')
@@ -1144,10 +1187,13 @@ class App(ctk.CTk):
 
         proc_start_time = datetime.datetime.now()
         self.cancel = False
+        self.paused = False
 
-        # Show the stop button
+        # Show the stop and pause buttons
         self.start_button.pack_forget() # hide
-        self.stop_button.pack(padx=[20, 0], pady=[20,30], expand=False, fill='x', anchor='sw')
+        self.button_frame.pack(padx=[20, 0], pady=[20,30], expand=False, fill='x', anchor='sw')
+        self.stop_button.pack(side='left', padx=[0, 5], expand=True, fill='x')
+        self.pause_button.pack(side='right', padx=[5, 0], expand=True, fill='x')
         
 
         
@@ -1457,7 +1503,17 @@ class App(ctk.CTk):
                             for line in pyannote_proc.stdout:
                                 if self.cancel:
                                     pyannote_proc.kill()
-                                    raise Exception(t('err_user_cancelation')) 
+                                    raise Exception(t('err_user_cancelation'))
+                                
+                                # check for pause state
+                                while self.paused and not self.cancel:
+                                    time.sleep(0.1)  # Small delay to prevent high CPU usage
+                                
+                                # if cancelled while paused, exit
+                                if self.cancel:
+                                    pyannote_proc.kill()
+                                    raise Exception(t('err_user_cancelation'))
+                                
                                 print(line)
                                 if line.startswith('progress '):
                                     progress = line.split()
@@ -1565,6 +1621,8 @@ class App(ctk.CTk):
                         txt = html_to_text(d)
                     elif self.file_ext == 'vtt':
                         txt = html_to_webvtt(d, self.audio_file)
+                    elif self.file_ext == 'srt':
+                        txt = html_to_srt(d, self.audio_file)
                     else:
                         raise TypeError(f'Invalid file type "{self.file_ext}".')
                     try:
@@ -1727,6 +1785,19 @@ class App(ctk.CTk):
                                 self.log(t('transcription_saved'))
                                 self.logn(self.my_transcript_file, link=f'file://{self.my_transcript_file}')
 
+                            raise Exception(t('err_user_cancelation'))
+                        
+                        # check for pause state
+                        while self.paused and not self.cancel:
+                            time.sleep(0.1)  # Small delay to prevent high CPU usage
+                        
+                        # if cancelled while paused, exit
+                        if self.cancel:
+                            if self.auto_save:
+                                save_doc()
+                                self.logn()
+                                self.log(t('transcription_saved'))
+                                self.logn(self.my_transcript_file, link=f'file://{self.my_transcript_file}')
                             raise Exception(t('err_user_cancelation')) 
                         
 
@@ -1896,8 +1967,8 @@ class App(ctk.CTk):
             return
 
         finally:
-            # hide the stop button
-            self.stop_button.pack_forget() # hide
+            # hide the stop and pause buttons
+            self.button_frame.pack_forget() # hide
             self.start_button.pack(padx=[20, 0], pady=[20,30], expand=False, fill='x', anchor='sw')
 
             # hide progress
@@ -1925,6 +1996,19 @@ class App(ctk.CTk):
             self.logn(t('start_canceling'))
             self.update()
             self.cancel = True
+
+    def button_pause_event(self):
+        """Toggle pause/resume state"""
+        if self.paused:
+            # Resume
+            self.paused = False
+            self.pause_button.configure(text='⏸', fg_color='#3B8ED0', hover_color='#3B8ED0')
+            self.logn(t('resume_transcription'), 'highlight')
+        else:
+            # Pause
+            self.paused = True
+            self.pause_button.configure(text='▶', fg_color='#2E7D32', hover_color='#2E7D32')
+            self.logn(t('pause_transcription'), 'highlight')
 
 
 
@@ -1964,10 +2048,13 @@ class App(ctk.CTk):
         """Process all files in a directory"""
         proc_start_time = datetime.datetime.now()
         self.cancel = False
+        self.paused = False
 
-        # Show the stop button
+        # Show the stop and pause buttons
         self.start_button.pack_forget() # hide
-        self.stop_button.pack(padx=[20, 0], pady=[20,30], expand=False, fill='x', anchor='sw')
+        self.button_frame.pack(padx=[20, 0], pady=[20,30], expand=False, fill='x', anchor='sw')
+        self.stop_button.pack(side='left', padx=[0, 5], expand=True, fill='x')
+        self.pause_button.pack(side='right', padx=[5, 0], expand=True, fill='x')
 
         try:
             if not self.directory_files:
@@ -1979,6 +2066,14 @@ class App(ctk.CTk):
             self.logn(t('dir_processing_files', count=len(self.directory_files)))
             
             for i, audio_file in enumerate(self.directory_files):
+                if self.cancel:
+                    break
+                
+                # check for pause state
+                while self.paused and not self.cancel:
+                    time.sleep(0.1)  # Small delay to prevent high CPU usage
+                
+                # if cancelled while paused, exit
                 if self.cancel:
                     break
                 
@@ -2032,8 +2127,8 @@ class App(ctk.CTk):
             self.logn(e, 'error', tb=traceback_str)
         
         finally:
-            # hide the stop button
-            self.stop_button.pack_forget() # hide
+            # hide the stop and pause buttons
+            self.button_frame.pack_forget() # hide
             self.start_button.pack(padx=[20, 0], pady=[20,30], expand=False, fill='x', anchor='sw')
 
             # hide progress
