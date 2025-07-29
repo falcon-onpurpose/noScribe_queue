@@ -1029,6 +1029,12 @@ class App(ctk.CTk):
                 tk.messagebox.showerror(title='noScribe', message=t('err_no_audio_file'))
                 return
 
+            # Auto-generate transcript filename if auto-filename is enabled and no transcript file is selected
+            if self.transcript_file == '' and self.check_box_auto_filename.get():
+                selected_format = self.option_menu_auto_filename_format.get()
+                self.transcript_file = self.generate_auto_filename(self.audio_file, selected_format)
+                self.logn(t('log_transcript_filename') + self.transcript_file)
+
             if self.transcript_file == '':
                 self.logn(t('err_no_transcript_file'), 'error')
                 tk.messagebox.showerror(title='noScribe', message=t('err_no_transcript_file'))
