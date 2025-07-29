@@ -414,6 +414,8 @@ class App(ctk.CTk):
         self.transcript_file = ''
         self.log_file = None
         self.cancel = False
+        self.processing_directory = False
+        self.directory_files = []
 
         # configure window
         self.title('noScribe - ' + t('app_header'))
@@ -480,6 +482,11 @@ class App(ctk.CTk):
         self.button_audio_file = ctk.CTkButton(self.frame_audio_file, width=35, height=29, text='📄', command=self.button_audio_file_event)
         self.button_audio_file.place(x=188, y=2)
         
+        # Directory selection button (new functionality) - folder icon for directory (very compact)
+        self.button_directory = ctk.CTkButton(self.frame_audio_file, width=25, height=29, text='📁', 
+                                             command=self.button_directory_event)
+        self.button_directory.place(x=228, y=2)
+
 
 
         # input transcript file name
@@ -898,13 +905,66 @@ class App(ctk.CTk):
         
         return output_filename
 
+    def get_audio_files_from_directory(self, directory):
+        """Recursively find all audio and video files in directory that ffmpeg can process"""
+        # Comprehensive list of file extensions that ffmpeg can handle
+        supported_extensions = {
+            # Audio formats
+            '.mp3', '.wav', '.m4a', '.flac', '.aac', '.ogg', '.wma', '.aiff', '.wma', '.opus', '.amr', '.ac3', '.dts',
+            # Video formats (ffmpeg can extract audio from these)
+            '.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv', '.webm', '.m4v', '.3gp', '.ogv', '.ts', '.mts', '.m2ts',
+            # Other media formats
+            '.m4b', '.m4p', '.3g2', '.asf', '.divx', '.f4v', '.f4p', '.f4a', '.f4b',
+            # Professional formats
+            '.mxf', '.wav', '.bwf', '.aif', '.aiff', '.caf', '.pcm', '.raw', '.au', '.snd'
+        }
+        
+        audio_files = []
+        
+        for root, dirs, files in os.walk(directory):
+            for file in files:
+                if os.path.splitext(file)[1].lower() in supported_extensions:
+                    audio_files.append(os.path.join(root, file))
+        
+        return audio_files
 
+    def show_directory_warning(self, file_count):
+        """Show warning dialog for directory processing"""
+        message = t('dir_warning_message').replace('%{count}', str(file_count))
+        # Fix newline characters
+        message = message.replace('\\n', '\n')
+        result = tk.messagebox.askyesno(
+            title=t('dir_warning_title'),
+            message=message
+        )
+        return result
 
-
-
-
-
-
+    def button_directory_event(self):
+        """Dedicated directory selection event handler"""
+        dir_path = tk.filedialog.askdirectory(
+            initialdir=os.path.dirname(self.audio_file) if self.audio_file else os.path.expanduser("~"),
+            title="Select directory containing audio/video files"
+        )
+        
+        if dir_path:
+            # Get all audio files from directory
+            audio_files = self.get_audio_files_from_directory(dir_path)
+            
+            if not audio_files:
+                tk.messagebox.showwarning("No Media Files", "No audio or video files found in the selected directory.")
+                return
+            
+            # Show warning dialog
+            if not self.show_directory_warning(len(audio_files)):
+                return
+            
+            # Store directory and files for processing
+            self.audio_directory = dir_path
+            self.directory_files = audio_files
+            self.processing_directory = True
+            
+            self.logn(f"Directory selected: {dir_path} ({len(audio_files)} files)")
+            self.button_audio_file_name.configure(text=f"📁 {os.path.basename(dir_path)} ({len(audio_files)} files)")
 
     def button_audio_file_event(self):
         """Single file selection event handler"""
@@ -920,10 +980,6 @@ class App(ctk.CTk):
             self.processing_directory = False
             self.logn(t('log_audio_file_selected') + self.audio_file)
             self.button_audio_file_name.configure(text=os.path.basename(self.audio_file))
-
-
-
-
 
     def button_transcript_file_event(self):
         # Check if auto-filename is enabled
