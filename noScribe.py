@@ -813,8 +813,8 @@ class App(ctk.CTk):
         return list(self.whisper_model_paths.keys())
     
     def on_whisper_model_selected(self, value):
-        print(self.option_menu_whisper_model.old_value)
-        print(value)
+        # Model selection handler - currently unused
+        pass
         
     def on_resize(self, event):
         self.update_scrollbar_visibility()
