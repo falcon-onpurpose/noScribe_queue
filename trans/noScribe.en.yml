@@ -59,6 +59,8 @@ en:
   start_identifiying_speakers: 'Speaker identification...'
   loading_pyannote: 'Loading pyannote'
   start_canceling: 'Canceling... (please wait a second)'
+  pause_transcription: 'Transcription paused'
+  resume_transcription: 'Transcription resumed'
   start_transcription: 'Transcription...'
   loading_whisper: 'Loading whisper'
   vad: 'Voice activity detection...'
