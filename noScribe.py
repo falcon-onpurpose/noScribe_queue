@@ -506,7 +506,7 @@ class App(ctk.CTk):
         self.label_audio_file.pack(padx=20, pady=[20,0], anchor='w')
 
         self.frame_audio_file = ctk.CTkFrame(self.scrollable_options, width=260, height=33, corner_radius=8, border_width=2)
-        self.frame_audio_file.pack(padx=20, pady=[0,10], anchor='w')
+        self.frame_audio_file.pack(padx=20, pady=[0,5], anchor='w')
         self.frame_audio_file.pack_propagate(False)  # Prevent frame from shrinking
 
         self.button_audio_file_name = ctk.CTkButton(self.frame_audio_file, width=180, corner_radius=8, bg_color='transparent', 
@@ -524,14 +524,12 @@ class App(ctk.CTk):
                                              command=self.button_directory_event)
         self.button_directory.place(x=228, y=2)
 
-
-
         # input transcript file name
         self.label_transcript_file = ctk.CTkLabel(self.scrollable_options, text=t('label_transcript_file'))
-        self.label_transcript_file.pack(padx=20, pady=[10,0], anchor='w')
+        self.label_transcript_file.pack(padx=20, pady=[5,0], anchor='w')
 
         self.frame_transcript_file = ctk.CTkFrame(self.scrollable_options, width=260, height=33, corner_radius=8, border_width=2)
-        self.frame_transcript_file.pack(padx=20, pady=[0,10], anchor='w')
+        self.frame_transcript_file.pack(padx=20, pady=[0,5], anchor='w')
 
         self.button_transcript_file_name = ctk.CTkButton(self.frame_transcript_file, width=200, corner_radius=8, bg_color='transparent', 
                                                     fg_color='transparent', hover_color=self.frame_transcript_file._bg_color, 
@@ -544,7 +542,7 @@ class App(ctk.CTk):
 
         # Auto-filename checkbox and format dropdown (same line)
         self.frame_auto_filename = ctk.CTkFrame(self.scrollable_options, fg_color='transparent')
-        self.frame_auto_filename.pack(padx=20, pady=[0,10], anchor='w', fill='x')
+        self.frame_auto_filename.pack(padx=20, pady=[0,5], anchor='w', fill='x')
         
         # Configure grid for auto-filename frame
         self.frame_auto_filename.grid_columnconfigure(0, weight=1, minsize=0)
@@ -555,7 +553,7 @@ class App(ctk.CTk):
         
         self.option_menu_auto_filename_format = ctk.CTkOptionMenu(
             self.frame_auto_filename, 
-            width=80,  # Wider width to fit "html" properly
+            width=100,  # Match width of other dropdown boxes
             values=['html', 'txt', 'vtt', 'srt'],
             dynamic_resizing=False
         )
@@ -584,7 +582,7 @@ class App(ctk.CTk):
         # Options grid
         self.frame_options = ctk.CTkFrame(self.scrollable_options, width=250, fg_color='transparent')
         self.frame_options.pack_propagate(False)
-        self.frame_options.pack(padx=20, pady=10, anchor='w', fill='x')
+        self.frame_options.pack(padx=20, pady=5, anchor='w', fill='x')
 
         # self.frame_options.grid_configure .resizable(width=False, height=True)
         self.frame_options.grid_columnconfigure(0, weight=1, minsize=0)
